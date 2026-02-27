@@ -1,0 +1,221 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 项目表
+model Project {
+  id            Int        @id @default(autoincrement())
+  name          String     @db.VarChar(255)
+  description   String?    @db.Text
+  coverImage    String?    @db.VarChar(500)
+  totalEpisodes Int        @default(10)
+  status        ProjectStatus @default(DRAFT)
+  settings      Json?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  characters    Character[]
+  scenes        Scene[]
+  episodes      Episode[]
+  assets        Asset[]
+  tasks         Task[]
+}
+
+enum ProjectStatus {
+  DRAFT
+  GENERATING
+  COMPLETED
+}
+
+// 角色表
+model Character {
+  id          Int        @id @default(autoincrement())
+  projectId   Int
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String     @db.VarChar(100)
+  description String?    @db.Text
+  avatarPath  String?    @db.VarChar(500)
+  traits      Json?
+  voiceId     String?    @db.VarChar(100)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  shots       Shot[]
+  angleImages CharacterAngleImage[]
+}
+
+model CharacterAngleImage {
+  id          Int       @id @default(autoincrement())
+  characterId Int
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  angle       String    @db.VarChar(50)
+  filePath    String    @db.VarChar(500)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([characterId, angle])
+}
+
+// 场景表
+model Scene {
+  id            Int        @id @default(autoincrement())
+  projectId     Int
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name          String     @db.VarChar(100)
+  description   String?    @db.Text
+  backgroundPath String?   @db.VarChar(500)
+  location      String?    @db.VarChar(100)
+  timeOfDay     TimeOfDay?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  shots         Shot[]
+}
+
+enum TimeOfDay {
+  MORNING
+  AFTERNOON
+  EVENING
+  NIGHT
+  DAWN
+  DUSK
+}
+
+// 剧集表
+model Episode {
+  id            Int        @id @default(autoincrement())
+  projectId     Int
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episodeNumber Int
+  title         String?    @db.VarChar(255)
+  synopsis      String?    @db.Text
+  storyOutline  String?    @db.Text
+  dialogueText  String?    @db.LongText
+  status        EpisodeStatus @default(PENDING)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  shots         Shot[]
+
+  @@unique([projectId, episodeNumber])
+}
+
+enum EpisodeStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// 分镜表
+model Shot {
+  id              Int        @id @default(autoincrement())
+  episodeId       Int
+  episode         Episode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  shotNumber      Int
+  shotType        ShotType   @default(MEDIUM_SHOT)
+  shotDescription String?    @db.Text
+  videoPrompt     String?    @db.Text
+  characterId     Int?
+  character       Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  sceneId         Int?
+  scene           Scene?     @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  characterImage  String?    @db.VarChar(500)
+  sceneImage      String?    @db.VarChar(500)
+  videoPath       String?    @db.VarChar(500)
+  ttsAudioPath   String?    @db.VarChar(500)
+  lipSyncVideo   String?    @db.VarChar(500)
+  duration        Float?     @default(5.0)
+  status          ShotStatus @default(PENDING)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+enum ShotType {
+  EXTREME_WIDE_SHOT
+  WIDE_SHOT
+  FULL_SHOT
+  MEDIUM_WIDE_SHOT
+  MEDIUM_SHOT
+  MEDIUM_CLOSE_UP
+  CLOSE_UP
+  EXTREME_CLOSE_UP
+  POV
+  TWO_SHOT
+}
+
+enum ShotStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// 素材表
+model Asset {
+  id          Int        @id @default(autoincrement())
+  projectId   Int
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assetType   AssetType
+  filePath    String     @db.VarChar(500)
+  source      AssetSource @default(UPLOADED)
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+}
+
+enum AssetType {
+  CHARACTER_IMAGE
+  SCENE_IMAGE
+  BACKGROUND
+  AUDIO
+  VIDEO
+}
+
+enum AssetSource {
+  GENERATED
+  UPLOADED
+}
+
+// 任务表
+model Task {
+  id          Int        @id @default(autoincrement())
+  projectId   Int
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskType    TaskType
+  targetId    Int?
+  targetType  String?
+  status      TaskStatus @default(PENDING)
+  inputData   Json?
+  outputData  Json?
+  errorMsg    String?    @db.Text
+  progress    Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  completedAt DateTime?
+}
+
+enum TaskType {
+  GENERATE_OUTLINE
+  GENERATE_CHARACTERS
+  GENERATE_SCENES
+  GENERATE_EPISODE
+  GENERATE_SHOTS
+  GENERATE_TTS
+  GENERATE_VIDEO
+  MERGE_VIDEO
+}
+
+enum TaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
