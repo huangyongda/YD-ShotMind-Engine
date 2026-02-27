@@ -1,6 +1,6 @@
-import type { Project, Character, Scene, Episode, Shot, Asset, Task, ProjectStatus, TimeOfDay, ShotType, ShotStatus, AssetType, AssetSource, TaskType, TaskStatus, EpisodeStatus } from '@prisma/client'
+import type { Project, Character, Scene, Episode, Shot, Storyboard, Asset, Task, ProjectStatus, TimeOfDay, ShotType, ShotStatus, AssetType, AssetSource, TaskType, TaskStatus, EpisodeStatus } from '@prisma/client'
 
-export type { Project, Character, Scene, Episode, Shot, Asset, Task, ProjectStatus, TimeOfDay, ShotType, ShotStatus, AssetType, AssetSource, TaskType, TaskStatus, EpisodeStatus }
+export type { Project, Character, Scene, Episode, Shot, Storyboard, Asset, Task, ProjectStatus, TimeOfDay, ShotType, ShotStatus, AssetType, AssetSource, TaskType, TaskStatus, EpisodeStatus }
 
 export type ProjectWithRelations = Project & {
   characters?: Character[]
@@ -12,9 +12,19 @@ export type EpisodeWithShots = Episode & {
   shots?: Shot[]
 }
 
+export type StoryboardWithShots = Storyboard & {
+  shots?: Shot[]
+}
+
+export type EpisodeWithStoryboards = Episode & {
+  storyboards?: StoryboardWithShots[]
+  shots?: Shot[]
+}
+
 export type ShotWithRelations = Shot & {
   character?: Character | null
   scene?: Scene | null
+  storyboard?: Storyboard | null
 }
 
 // API Response types
@@ -70,6 +80,7 @@ export interface CreateEpisodeInput {
 
 export interface CreateShotInput {
   episodeId: number
+  storyboardId?: number
   shotNumber: number
   shotType?: ShotType
   shotDescription?: string
@@ -78,6 +89,13 @@ export interface CreateShotInput {
   sceneId?: number
   characterImage?: string
   sceneImage?: string
+}
+
+export interface CreateStoryboardInput {
+  episodeId: number
+  boardNumber: number
+  title?: string
+  description?: string
 }
 
 // Generation types

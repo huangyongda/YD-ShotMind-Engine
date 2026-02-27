@@ -1,5 +1,18 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getSceneImageStats } from '@/types/scene-image'
+
+function formatSceneWithAngleStats(scene: {
+  angleImages: Array<{ angle: string; filePath: string }>
+  [key: string]: unknown
+}) {
+  const { uploadedCount, missingAngles } = getSceneImageStats(scene.angleImages)
+  return {
+    ...scene,
+    uploadedCount,
+    missingAngles
+  }
+}
 
 export async function GET(
   request: Request,
@@ -13,12 +26,36 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid project ID' }, { status: 400 })
     }
 
-    const scenes = await prisma.scene.findMany({
-      where: { projectId: id },
-      orderBy: { createdAt: 'asc' }
-    })
+    let scenes: Array<{
+      angleImages: Array<{ angle: string; filePath: string }>
+      [key: string]: unknown
+    }>
 
-    return NextResponse.json({ success: true, data: scenes })
+    try {
+      scenes = await prisma.scene.findMany({
+        where: { projectId: id },
+        include: {
+          angleImages: {
+            orderBy: { angle: 'asc' }
+          }
+        },
+        orderBy: { createdAt: 'asc' }
+      })
+    } catch (error) {
+      console.warn('Falling back to legacy scene query without angleImages:', error)
+      const legacyScenes = await prisma.scene.findMany({
+        where: { projectId: id },
+        orderBy: { createdAt: 'asc' }
+      })
+      scenes = legacyScenes.map((item) => ({
+        ...item,
+        angleImages: []
+      }))
+    }
+
+    const formattedScenes = scenes.map(formatSceneWithAngleStats)
+
+    return NextResponse.json({ success: true, data: formattedScenes })
   } catch (error) {
     console.error('Error fetching scenes:', error)
     return NextResponse.json({ success: false, error: 'Failed to fetch scenes' }, { status: 500 })

@@ -4,33 +4,32 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
-interface Character {
-  id: number
-  name: string
-  avatarPath: string | null
-}
-
-interface Scene {
-  id: number
-  name: string
-  backgroundPath: string | null
-}
-
 interface Shot {
   id: number
   shotNumber: number
   shotType: string
   shotDescription: string | null
+  cameraMovement: string | null
+  dialogueText: string | null
   videoPrompt: string | null
   characterId: number | null
+  characterIds?: number[] | null
   sceneId: number | null
   characterImage: string | null
   sceneImage: string | null
   videoPath: string | null
-  ttsAudioPath: string | null
+  duration: number | null
   status: string
-  character?: Character | null
-  scene?: Scene | null
+  character?: { id: number; name: string; avatarPath: string | null } | null
+  scene?: { id: number; name: string; backgroundPath: string | null } | null
+}
+
+interface Storyboard {
+  id: number
+  boardNumber: number
+  title: string | null
+  description: string | null
+  shots: Shot[]
 }
 
 interface Episode {
@@ -42,6 +41,7 @@ interface Episode {
   dialogueText: string | null
   status: string
   shots: Shot[]
+  storyboards: Storyboard[]
 }
 
 export default function EpisodeDetailPage() {
@@ -49,40 +49,43 @@ export default function EpisodeDetailPage() {
   const projectId = params.id as string
   const episodeId = params.episodeId as string
   const [episode, setEpisode] = useState<Episode | null>(null)
-  const [characters, setCharacters] = useState<Character[]>([])
-  const [scenes, setScenes] = useState<Scene[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [formData, setFormData] = useState({
-    shotNumber: 1,
-    shotType: 'MEDIUM_SHOT',
-    shotDescription: '',
-    videoPrompt: '',
-    characterId: '',
-    sceneId: '',
-    characterImage: '',
-    sceneImage: ''
+  const [savingEpisode, setSavingEpisode] = useState(false)
+  const [episodeForm, setEpisodeForm] = useState({
+    synopsis: '',
+    storyOutline: '',
+    dialogueText: ''
+  })
+  const [episodeSaveMessage, setEpisodeSaveMessage] = useState<string | null>(null)
+
+  const [showStoryboardForm, setShowStoryboardForm] = useState(false)
+  const [storyboardForm, setStoryboardForm] = useState({
+    boardNumber: 1,
+    title: '',
+    description: ''
   })
 
   useEffect(() => {
     fetchData()
-  }, [projectId, episodeId])
+  }, [episodeId])
 
   const fetchData = async () => {
     try {
-      const [epRes, charRes, sceneRes] = await Promise.all([
-        fetch(`/api/episodes/${episodeId}`),
-        fetch(`/api/projects/${projectId}/characters`),
-        fetch(`/api/projects/${projectId}/scenes`)
-      ])
+      const epRes = await fetch(`/api/episodes/${episodeId}`)
       const epData = await epRes.json()
-      const charData = await charRes.json()
-      const sceneData = await sceneRes.json()
 
-      if (epData.success) setEpisode(epData.data)
-      if (charData.success) setCharacters(charData.data)
-      if (sceneData.success) setScenes(sceneData.data)
+      if (epData.success) {
+        setEpisode(epData.data)
+        setEpisodeForm({
+          synopsis: epData.data.synopsis || '',
+          storyOutline: epData.data.storyOutline || '',
+          dialogueText: epData.data.dialogueText || ''
+        })
+        setStoryboardForm((prev) => ({
+          ...prev,
+          boardNumber: (epData.data.storyboards?.length || 0) + 1
+        }))
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -90,53 +93,75 @@ export default function EpisodeDetailPage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSaveEpisodeContent = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    const payload = {
-      ...formData,
-      characterId: formData.characterId ? parseInt(formData.characterId) : null,
-      sceneId: formData.sceneId ? parseInt(formData.sceneId) : null
-    }
-
-    const url = editingId
-      ? `/api/shots/${editingId}`
-      : `/api/episodes/${episodeId}/shots`
-    const method = editingId ? 'PUT' : 'POST'
+    setSavingEpisode(true)
+    setEpisodeSaveMessage(null)
 
     try {
-      const res = await fetch(url, {
-        method,
+      const res = await fetch(`/api/episodes/${episodeId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          synopsis: episodeForm.synopsis || null,
+          storyOutline: episodeForm.storyOutline || null,
+          dialogueText: episodeForm.dialogueText || null
+        })
+      })
+
+      const data = await res.json()
+      if (!data.success) {
+        setEpisodeSaveMessage(data.error || '保存剧集内容失败')
+        return
+      }
+
+      setEpisode((prev) => prev ? {
+        ...prev,
+        synopsis: data.data.synopsis,
+        storyOutline: data.data.storyOutline,
+        dialogueText: data.data.dialogueText
+      } : prev)
+      setEpisodeSaveMessage('已保存')
+    } catch (error) {
+      console.error('Error saving episode content:', error)
+      setEpisodeSaveMessage('保存剧集内容失败')
+    } finally {
+      setSavingEpisode(false)
+    }
+  }
+
+  const handleCreateStoryboard = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/storyboards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boardNumber: storyboardForm.boardNumber,
+          title: storyboardForm.title || null,
+          description: storyboardForm.description || null
+        })
       })
       const data = await res.json()
       if (data.success) {
+        setShowStoryboardForm(false)
+        setStoryboardForm({
+          boardNumber: (episode?.storyboards.length || 0) + 2,
+          title: '',
+          description: ''
+        })
         fetchData()
-        resetForm()
+      } else {
+        alert(data.error || '创建分镜失败')
       }
     } catch (error) {
-      console.error('Error saving shot:', error)
+      console.error('Error creating storyboard:', error)
     }
   }
 
-  const handleEdit = (shot: Shot) => {
-    setFormData({
-      shotNumber: shot.shotNumber,
-      shotType: shot.shotType,
-      shotDescription: shot.shotDescription || '',
-      videoPrompt: shot.videoPrompt || '',
-      characterId: shot.characterId?.toString() || '',
-      sceneId: shot.sceneId?.toString() || '',
-      characterImage: shot.characterImage || '',
-      sceneImage: shot.sceneImage || ''
-    })
-    setEditingId(shot.id)
-    setShowForm(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这个分镜吗？')) return
+  const handleDeleteShot = async (id: number) => {
+    if (!confirm('确定要删除这个镜头吗？')) return
     try {
       const res = await fetch(`/api/shots/${id}`, { method: 'DELETE' })
       const data = await res.json()
@@ -148,19 +173,19 @@ export default function EpisodeDetailPage() {
     }
   }
 
-  const resetForm = () => {
-    setFormData({
-      shotNumber: (episode?.shots.length || 0) + 1,
-      shotType: 'MEDIUM_SHOT',
-      shotDescription: '',
-      videoPrompt: '',
-      characterId: '',
-      sceneId: '',
-      characterImage: '',
-      sceneImage: ''
-    })
-    setEditingId(null)
-    setShowForm(false)
+  const handleDeleteStoryboard = async (id: number) => {
+    if (!confirm('确定要删除这个分镜吗？（必须先删除其下所有镜头）')) return
+    try {
+      const res = await fetch(`/api/storyboards/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        fetchData()
+      } else {
+        alert(data.error || '删除分镜失败')
+      }
+    } catch (error) {
+      console.error('Error deleting storyboard:', error)
+    }
   }
 
   const shotTypeMap: Record<string, string> = {
@@ -205,7 +230,7 @@ export default function EpisodeDetailPage() {
               视频生成
             </Link>
             <button
-              onClick={() => setShowForm(true)}
+              onClick={() => setShowStoryboardForm(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               添加分镜
@@ -216,185 +241,179 @@ export default function EpisodeDetailPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0 space-y-6">
-          {/* 剧集信息 */}
           <div className="bg-white shadow rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">剧集信息</h2>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <form onSubmit={handleSaveEpisodeContent} className="space-y-4">
               <div>
-                <span className="text-gray-500">简介:</span>
-                <p className="mt-1">{episode.synopsis || '暂无'}</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">简介</label>
+                <textarea
+                  value={episodeForm.synopsis}
+                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, synopsis: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
               </div>
+
               <div>
-                <span className="text-gray-500">状态:</span>
-                <span className="ml-2">{statusMap[episode.status]}</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">完整内容</label>
+                <textarea
+                  value={episodeForm.storyOutline}
+                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, storyOutline: e.target.value }))}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
               </div>
-            </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">对白内容</label>
+                <textarea
+                  value={episodeForm.dialogueText}
+                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, dialogueText: e.target.value }))}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">状态:</span>
+                  <span className="ml-2">{statusMap[episode.status]}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={savingEpisode}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingEpisode ? '保存中...' : '保存剧集内容'}
+                </button>
+                {episodeSaveMessage && <span className="text-sm text-gray-600">{episodeSaveMessage}</span>}
+              </div>
+            </form>
           </div>
 
-          {/* 分镜列表 */}
           <div className="bg-white shadow rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">分镜列表</h2>
-              <span className="text-gray-500 text-sm">共 {episode.shots.length} 个分镜</span>
+              <span className="text-gray-500 text-sm">共 {episode.storyboards.length} 个分镜 / {episode.shots.length} 个镜头</span>
             </div>
 
-            {episode.shots.length === 0 ? (
+            {episode.storyboards.length === 0 ? (
               <p className="text-gray-500 text-center py-8">暂无分镜</p>
             ) : (
-              <div className="space-y-4">
-                {episode.shots.map((shot) => (
-                  <div key={shot.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-medium">分镜 {shot.shotNumber}</span>
-                          <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{shotTypeMap[shot.shotType]}</span>
-                          <span className={`px-2 py-0.5 rounded text-xs ${
-                            shot.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                            shot.status === 'GENERATING' ? 'bg-yellow-100 text-yellow-800' :
-                            shot.status === 'FAILED' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {statusMap[shot.status]}
-                          </span>
+              <div className="space-y-5">
+                {episode.storyboards.map((storyboard) => (
+                  <div key={storyboard.id} className="border rounded-lg p-4 bg-gray-50">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">分镜 {storyboard.boardNumber}</span>
+                          {storyboard.title && <span className="text-sm text-gray-600">{storyboard.title}</span>}
                         </div>
-                        <p className="text-gray-600 text-sm mb-2">{shot.shotDescription || '暂无描述'}</p>
-                        {shot.videoPrompt && (
-                          <p className="text-gray-500 text-xs mb-2">提示词: {shot.videoPrompt}</p>
-                        )}
-                        <div className="flex gap-4 text-xs text-gray-500">
-                          {shot.character && <span>角色: {shot.character.name}</span>}
-                          {shot.scene && <span>场景: {shot.scene.name}</span>}
-                        </div>
+                        {storyboard.description && <p className="text-sm text-gray-600 mt-1">{storyboard.description}</p>}
                       </div>
-                      <div className="flex gap-2 ml-4">
-                        <button onClick={() => handleEdit(shot)} className="text-blue-600 hover:text-blue-800 text-sm">编辑</button>
-                        <button onClick={() => handleDelete(shot.id)} className="text-red-600 hover:text-red-800 text-sm">删除</button>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/projects/${projectId}/episodes/${episodeId}/shots/new?storyboardId=${storyboard.id}&boardNumber=${storyboard.boardNumber}&shotNumber=${storyboard.shots.length + 1}`}
+                          className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          添加镜头
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteStoryboard(storyboard.id)}
+                          className="text-sm px-3 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50"
+                        >
+                          删除分镜
+                        </button>
                       </div>
                     </div>
-                    {/* 预览图 */}
-                    <div className="flex gap-2 mt-3">
-                      {shot.characterImage && (
-                        <img src={shot.characterImage} alt="角色" className="w-20 h-20 object-cover rounded" />
-                      )}
-                      {shot.sceneImage && (
-                        <img src={shot.sceneImage} alt="场景" className="w-20 h-20 object-cover rounded" />
-                      )}
-                      {shot.videoPath && (
-                        <video src={shot.videoPath} className="w-32 h-20 object-cover rounded" />
-                      )}
-                    </div>
+
+                    {storyboard.shots.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-4">暂无镜头</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {storyboard.shots.map((shot) => (
+                          <div key={shot.id} className="border rounded p-3 bg-white">
+                            <div className="flex items-start justify-between gap-4">
+                              <Link
+                                href={`/projects/${projectId}/episodes/${episodeId}/shots/${shot.id}`}
+                                className="flex-1 min-w-0"
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium">镜头 {shot.shotNumber}</span>
+                                  <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{shotTypeMap[shot.shotType]}</span>
+                                  <span className={`px-2 py-0.5 rounded text-xs ${
+                                    shot.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                    shot.status === 'GENERATING' ? 'bg-yellow-100 text-yellow-800' :
+                                    shot.status === 'FAILED' ? 'bg-red-100 text-red-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {statusMap[shot.status]}
+                                  </span>
+                                </div>
+                                <p className="text-gray-600 text-sm mb-1">{shot.shotDescription || '暂无描述'}</p>
+                                <div className="flex gap-4 text-xs text-gray-500">
+                                  {shot.character && <span>角色: {shot.character.name}</span>}
+                                  {shot.scene && <span>场景: {shot.scene.name}</span>}
+                                  {typeof shot.duration === 'number' && <span>时长: {shot.duration} 秒</span>}
+                                </div>
+                              </Link>
+                              <button
+                                onClick={() => handleDeleteShot(shot.id)}
+                                className="text-red-600 hover:text-red-800 text-sm"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* 分镜表单 */}
-          {showForm && (
+          {showStoryboardForm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-semibold mb-4">{editingId ? '编辑分镜' : '添加分镜'}</h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">分镜序号 *</label>
-                      <input
-                        type="number"
-                        required
-                        min={1}
-                        value={formData.shotNumber}
-                        onChange={(e) => setFormData({ ...formData, shotNumber: parseInt(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">镜头类型</label>
-                      <select
-                        value={formData.shotType}
-                        onChange={(e) => setFormData({ ...formData, shotType: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      >
-                        {Object.entries(shotTypeMap).map(([key, value]) => (
-                          <option key={key} value={key}>{value}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+              <div className="bg-white rounded-lg p-6 w-full max-w-xl">
+                <h2 className="text-xl font-semibold mb-4">添加分镜</h2>
+                <form onSubmit={handleCreateStoryboard} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">分镜描述</label>
-                    <textarea
-                      value={formData.shotDescription}
-                      onChange={(e) => setFormData({ ...formData, shotDescription: e.target.value })}
-                      rows={2}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">分镜序号 *</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={storyboardForm.boardNumber}
+                      onChange={(e) => setStoryboardForm({ ...storyboardForm, boardNumber: parseInt(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">视频提示词</label>
-                    <textarea
-                      value={formData.videoPrompt}
-                      onChange={(e) => setFormData({ ...formData, videoPrompt: e.target.value })}
-                      rows={2}
+                    <label className="block text-sm font-medium text-gray-700 mb-1">标题</label>
+                    <input
+                      type="text"
+                      value={storyboardForm.title}
+                      onChange={(e) => setStoryboardForm({ ...storyboardForm, title: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="用于生成视频的提示词"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">出场角色</label>
-                      <select
-                        value={formData.characterId}
-                        onChange={(e) => setFormData({ ...formData, characterId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      >
-                        <option value="">无</option>
-                        {characters.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">使用场景</label>
-                      <select
-                        value={formData.sceneId}
-                        onChange={(e) => setFormData({ ...formData, sceneId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      >
-                        <option value="">无</option>
-                        {scenes.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">角色参考图URL</label>
-                      <input
-                        type="text"
-                        value={formData.characterImage}
-                        onChange={(e) => setFormData({ ...formData, characterImage: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">场景参考图URL</label>
-                      <input
-                        type="text"
-                        value={formData.sceneImage}
-                        onChange={(e) => setFormData({ ...formData, sceneImage: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                    <textarea
+                      value={storyboardForm.description}
+                      onChange={(e) => setStoryboardForm({ ...storyboardForm, description: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                      {editingId ? '保存' : '添加'}
-                    </button>
-                    <button type="button" onClick={resetForm} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">
-                      取消
-                    </button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">创建</button>
+                    <button type="button" onClick={() => setShowStoryboardForm(false)} className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
                   </div>
                 </form>
               </div>

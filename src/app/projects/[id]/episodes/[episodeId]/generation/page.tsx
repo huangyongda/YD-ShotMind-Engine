@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
+interface StoryboardInfo {
+  id: number
+  boardNumber: number
+  title: string | null
+}
+
 interface Shot {
   id: number
   shotNumber: number
@@ -18,6 +24,7 @@ interface Shot {
   ttsAudioPath: string | null
   lipSyncVideo: string | null
   status: string
+  storyboard?: StoryboardInfo | null
   character?: { id: number; name: string; avatarPath: string | null } | null
   scene?: { id: number; name: string; backgroundPath: string | null } | null
 }
@@ -169,7 +176,9 @@ export default function GenerationPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-lg">分镜 {shot.shotNumber}</span>
+                        <span className="font-medium text-lg">
+                          {shot.storyboard?.boardNumber ? `分镜 ${shot.storyboard.boardNumber} / ` : ''}镜头 {shot.shotNumber}
+                        </span>
                         <span className={`px-2 py-1 rounded text-xs ${
                           shot.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
                           shot.status === 'GENERATING' ? 'bg-yellow-100 text-yellow-800' :

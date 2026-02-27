@@ -20,7 +20,20 @@ export async function GET(
           orderBy: { shotNumber: 'asc' },
           include: {
             character: true,
-            scene: true
+            scene: true,
+            storyboard: true
+          }
+        },
+        storyboards: {
+          orderBy: { boardNumber: 'asc' },
+          include: {
+            shots: {
+              orderBy: { shotNumber: 'asc' },
+              include: {
+                character: true,
+                scene: true
+              }
+            }
           }
         }
       }

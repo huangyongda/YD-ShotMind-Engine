@@ -66,18 +66,31 @@ model CharacterAngleImage {
 
 // 场景表
 model Scene {
-  id            Int        @id @default(autoincrement())
-  projectId     Int
-  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name          String     @db.VarChar(100)
-  description   String?    @db.Text
-  backgroundPath String?   @db.VarChar(500)
-  location      String?    @db.VarChar(100)
-  timeOfDay     TimeOfDay?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id             Int               @id @default(autoincrement())
+  projectId      Int
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String            @db.VarChar(100)
+  description    String?           @db.Text
+  backgroundPath String?           @db.VarChar(500)
+  location       String?           @db.VarChar(100)
+  timeOfDay      TimeOfDay?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  shots         Shot[]
+  shots          Shot[]
+  angleImages    SceneAngleImage[]
+}
+
+model SceneAngleImage {
+  id        Int      @id @default(autoincrement())
+  sceneId   Int
+  scene     Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  angle     String   @db.VarChar(50)
+  filePath  String   @db.VarChar(500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sceneId, angle])
 }
 
 enum TimeOfDay {
@@ -104,8 +117,24 @@ model Episode {
   updatedAt     DateTime   @updatedAt
 
   shots         Shot[]
+  storyboards   Storyboard[]
 
   @@unique([projectId, episodeNumber])
+}
+
+model Storyboard {
+  id          Int       @id @default(autoincrement())
+  episodeId   Int
+  episode     Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  boardNumber Int
+  title       String?   @db.VarChar(255)
+  description String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  shots       Shot[]
+
+  @@unique([episodeId, boardNumber])
 }
 
 enum EpisodeStatus {
@@ -120,23 +149,30 @@ model Shot {
   id              Int        @id @default(autoincrement())
   episodeId       Int
   episode         Episode    @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  storyboardId    Int?
+  storyboard      Storyboard? @relation(fields: [storyboardId], references: [id], onDelete: SetNull)
   shotNumber      Int
   shotType        ShotType   @default(MEDIUM_SHOT)
   shotDescription String?    @db.Text
+  cameraMovement  String?    @db.VarChar(100)
+  dialogueText    String?    @db.Text
   videoPrompt     String?    @db.Text
   characterId     Int?
+  characterIds    Json?
   character       Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
   sceneId         Int?
   scene           Scene?     @relation(fields: [sceneId], references: [id], onDelete: SetNull)
   characterImage  String?    @db.VarChar(500)
   sceneImage      String?    @db.VarChar(500)
   videoPath       String?    @db.VarChar(500)
-  ttsAudioPath   String?    @db.VarChar(500)
-  lipSyncVideo   String?    @db.VarChar(500)
+  ttsAudioPath    String?    @db.VarChar(500)
+  lipSyncVideo    String?    @db.VarChar(500)
   duration        Float?     @default(5.0)
   status          ShotStatus @default(PENDING)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+
+  @@index([storyboardId])
 }
 
 enum ShotType {

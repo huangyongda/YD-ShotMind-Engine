@@ -145,7 +145,19 @@ export default function EpisodesPage() {
                         </Link>
                       </td>
                       <td className="px-6 py-4">{episode.title || '-'}</td>
-                      <td className="px-6 py-4 text-gray-500 text-sm max-w-xs truncate">{episode.synopsis || '-'}</td>
+                      <td className="px-6 py-4 text-gray-500 text-sm max-w-xs align-top">
+                        <p
+                          title={episode.synopsis || '-'}
+                          className="overflow-hidden"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical'
+                          }}
+                        >
+                          {episode.synopsis || '-'}
+                        </p>
+                      </td>
                       <td className={`px-6 py-4 whitespace-nowrap ${statusColor[episode.status]}`}>
                         {statusMap[episode.status]}
                       </td>
